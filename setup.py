@@ -1,5 +1,12 @@
 from setuptools import setup
 
+with open('README.md', 'r') as handle:
+    long_description = handle.read()
+
+with open('requirements.txt') as f:
+    requirements = f.read().splitlines()
+
+
 setup(
     name='recoder',
     version='0.1',
