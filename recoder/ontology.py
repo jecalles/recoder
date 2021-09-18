@@ -5,7 +5,7 @@ from datetime import datetime
 
 import pandas as pd
 
-import cli
+from . import cli
 
 
 __all__ = [

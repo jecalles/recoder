@@ -11,9 +11,10 @@ setup(
     name='recoder',
     version='0.1',
     packages=[''],
-    url='',
+    url='https://github.com/jecalles/recoder',
     license='MIT',
     author='jonathancalles',
     author_email='callesjonathan@gmail.com',
-    description='a simple package for recoding overlapping genetic sequences'
+    description='a simple package for recoding overlapping genetic sequences',
+    long_description=long_description,
 )

@@ -1,1 +1,2 @@
 pandas~=1.1.5
+setuptools~=56.0.0

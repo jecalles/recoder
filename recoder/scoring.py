@@ -1,8 +1,8 @@
-from typing import List
+from pathlib import Path
 
 import pandas as pd
 
-from ontology import *
+from .ontology import *
 
 __all__ = [
     # matrices
@@ -11,7 +11,12 @@ __all__ = [
     'sum_score'
 ]
 
-blosum62 = pd.read_csv("formatted_blosum62.csv", index_col=0)
+
+PARENT_FILEPATH = Path(__file__).absolute().parent
+blosum62 = pd.read_csv(
+    Path(PARENT_FILEPATH, "data/formatted_blosum62.csv"),
+    index_col=0
+)
 
 
 def sum_score(

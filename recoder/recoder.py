@@ -6,9 +6,9 @@ import pandas as pd
 from synbio.polymers import DNA, Protein
 from synbio.utils import dNTPs
 
-import cli
-import scoring
-from ontology import *
+from . import cli
+from . import scoring
+from .ontology import *
 
 __all__ = [
     # Classes
