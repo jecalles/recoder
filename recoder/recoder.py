@@ -31,7 +31,7 @@ def get_aminos(split_seq: List[str]) -> AminoSet:
 
 class Recoder:
     SEQ_INPUT_PROMPT = "input sequence; highlight serine codon with brackets \
-        (" "e.g., 'g|tcg|ct'): "
+        (" "e.g., 'ct|ttcgga|t'): "
     RECODING_CHOICE_PROMPT = "which recoding would you like to choose? " \
                              "(please input int): "
 
@@ -144,7 +144,7 @@ class Recoder:
 
     @cli.pipeline
     @cli.userinterface(RECODING_CHOICE_PROMPT)
-    def choose_recodings(user_input: str,
+    def choose_recodings(self, user_input: str,
                          recodings: List[Recoding]) -> Recoding:
         return recodings[int(user_input)]
 
