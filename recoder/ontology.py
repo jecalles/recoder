@@ -47,11 +47,10 @@ class Recoding:
 
 @dataclass
 class Log:
+    name_of_recoding: List[str] = field(default_factory=list)
     original_seq: List[str] = field(default_factory=list)
     recoded_seq: List[str] = field(default_factory=list)
     score: List[float] = field(default_factory=list)
-    gene: List[str] = field(default_factory=list)
-    position: List[str] = field(default_factory=list)
     notes: List[str] = field(default_factory=list)
 
     def write_log(self, filename: str) -> None:

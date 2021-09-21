@@ -93,7 +93,7 @@ def generate_recodings(
         ) for recoded_site, score in zip(recoded_sites, scores)
     ]
     ranked_recodings = sorted(
-        recodings, key=lambda recoding: -recoding.score
+        recodings, key=lambda recoding: recoding.score
     )
 
     return ranked_recodings
@@ -110,19 +110,26 @@ def report_recodings(ranked_recodings: List[Recoding]):
     print(f"The first ten recodings are: ")
 
     for i, recoding in enumerate(ranked_recodings[:10]):
-        print(f"{i}: {'/' * 40}")
+        print(f"{i}: {'/' * 80}")
         report_(recoding)
 
 
 def update_log(
         log: Log, rec: Recoding,
-        gene_name: str, position: str, notes: str
+        on_frame_gene_name: str, on_frame_position: str,
+        off_frame_gene_name: str, off_frame_position: str,
+        notes: str
 ) -> Log:
+    log.name_of_recoding.append(
+        f"{on_frame_gene_name}: {rec.original_site.on_frame_prot[1]}"
+        f"{on_frame_position}{rec.recoded_site.on_frame_prot[1]}; "
+        f"{off_frame_gene_name}: {rec.original_site.off_frame_prot}"
+        f"{off_frame_position}{rec.recoded_site.off_frame_prot}"
+    )
+    print(log.name_of_recoding[-1])
     log.original_seq.append(rec.original_site.seq_str)
     log.recoded_seq.append(rec.recoded_site.seq_str)
     log.score.append(rec.score)
-    log.gene.append(gene_name)
-    log.position.append(position)
     log.notes.append(notes)
 
     return log
@@ -130,7 +137,7 @@ def update_log(
 
 if __name__ == "__main__":
     # script parameters
-    SCORING_FXN = None
+    SCORING_FXN = scoring.distribute_changes_score
 
     # long prompts
     seq_input_prompt = "input sequence; highlight serine codon with " \
@@ -167,11 +174,15 @@ if __name__ == "__main__":
             chosen_recoding = ranked_recodings[int(chosen_recoding_ix)]
 
             # update log
-            gene_name = cli.prompt_user("gene name: ")
-            position = cli.prompt_user("position of recoding (aa of TCG/TCA "
-                                       "codon): ")
+            on_frame_gene_name = cli.prompt_user("on frame gene name: ")
+            on_frame_position = cli.prompt_user("on frame gene position: ")
+            off_frame_gene_name = cli.prompt_user("off frame gene name: ")
+            off_frame_position = cli.prompt_user("off frame gene position: ")
             notes = cli.prompt_user("notes for this recoding?: ")
-            log = update_log(log, chosen_recoding, gene_name, position, notes)
+            log = update_log(log, chosen_recoding,
+                             on_frame_gene_name, on_frame_position,
+                             off_frame_gene_name, off_frame_position,
+                             notes)
         else:
             looping = False
 
