@@ -2,177 +2,180 @@ import itertools
 from functools import partial
 from typing import Callable, List, Optional, Set
 
+import cli
 import pandas as pd
-from synbio.polymers import DNA, Protein
+from synbio.polymers import DNA
 from synbio.utils import dNTPs
 
-from . import cli
-from . import scoring
-from .ontology import *
-
-__all__ = [
-    # Classes
-    "Recoder"
-]
+import scoring
+from ontology import *
 
 
-def get_aminos(split_seq: List[str]) -> AminoSet:
-    on_frame = DNA(''.join(split_seq))
-    off_frame = DNA(split_seq[1])
+# FUNCTIONS
+def input_seq_validator(seq):
+    split_seq = seq.split("|")
 
-    def to_str(prot: Protein) -> List[str]:
-        return [str(aa) for aa in prot]
-
-    return AminoSet(
-        to_str(on_frame.translate()),
-        to_str(off_frame.translate())
-    )
-
-
-class Recoder:
-    SEQ_INPUT_PROMPT = "input sequence; highlight serine codon with brackets \
-        (" "e.g., 'ct|ttcgga|t'): "
-    RECODING_CHOICE_PROMPT = "which recoding would you like to choose? " \
-                             "(please input int): "
-
-    def __init__(
-            self,
-            codons_to_remove: Optional[Set[str]] = None,
-            dist_mat: Optional[pd.DataFrame] = None,
-            score: Optional[
-                Callable[
-                    [pd.DataFrame, List[str], List[str]],  # takes 3 args
-                    float]  # outputs 1 arg
-            ] = None,
-            verbose: Optional[bool] = None
-    ):
-        self.codons_to_remove = codons_to_remove \
-            if codons_to_remove is not None \
-            else {'TCG', 'TCA', 'TGA'}
-
-        self.matrix = dist_mat if dist_mat is not None else scoring.blosum62
-
-        scorefxn = score if score is not None else scoring.sum_score
-        self.score = partial(scorefxn, self.matrix)
-        self.verbose = verbose if verbose is not None else False
-        self.log = Log()
-
-        self.__call__()
-
-    def __call__(self):
-        while True:
-            split_seq = self.ask_for_seq()
-            recodings = self.generate_recodings(split_seq)
-            choice = self.choose_recodings(recodings)
-            self.update_log(choice)
-
-            if split_seq is None:
-                break
-
-        self.write_log_prompt()
-
-    @cli.userinterface(SEQ_INPUT_PROMPT)
-    def ask_for_seq(self, user_input: str) -> List[str]:
-        split_seq = user_input.split("|")
-
-        # tests
-        assert len(split_seq) == 3
-        assert all(DNA()._seq_check(subseq) for subseq in split_seq)
+    bools = []
+    # tests
+    try:
+        bools.append(len(split_seq) == 3)
+        bools.append(all(DNA()._seq_check(subseq) for subseq in split_seq))
 
         recode_frame = DNA(''.join(split_seq))
-        assert len(recode_frame) == 9
+        bools.append(len(recode_frame) == 9)
         _ = recode_frame.translate()
 
         off_frame = DNA(split_seq[1])
-        assert len(off_frame) == 6
+        bools.append(len(off_frame) == 6)
         _ = off_frame.translate()
 
-        return split_seq
+        bools.append(True)
+    except:
+        bools.append(False)
 
-    @cli.pipeline
-    def generate_recodings(self, split_seq: List[str]) -> List[Recoding]:
-        possible_nt_changes = [
-            ''.join(tup)
-            for tup in itertools.product(dNTPs, repeat=len(split_seq[1]))
-        ]
+    return all(bools)
 
-        all_possible_sequences = [
-            (split_seq[0], recode, split_seq[2])
-            for recode in possible_nt_changes
-        ]
-        recoded_sequences = [
-            list(tup) for tup in all_possible_sequences
-            if ''.join(tup)[3:6].upper() not in self.codons_to_remove
-        ]
 
-        original_aminos = get_aminos(split_seq)
-        print(f"original_aminos: {original_aminos}")
-        recoded_aminos_list = [get_aminos(seq) for seq in recoded_sequences]
+def generate_recodings(
+        user_input: str,
+        codons_to_remove: Optional[Set[str]] = None,
+        dist_mat: Optional[pd.DataFrame] = None,
+        scoring_fxn: Optional[
+            Callable[
+                [pd.DataFrame, Site, Site],  # takes 3 args
+                float  # outputs 1 arg
+            ]
+        ] = None,
+) -> List[Recoding]:
+    # set optional parameters
+    if codons_to_remove is None:
+        codons_to_remove = {'TCG', 'TCA', 'TGA'}
 
-        scores = [
-            self.score(original_aminos, recoded_aminos)
-            for recoded_aminos in recoded_aminos_list
-        ]
+    if dist_mat is None:
+        dist_mat = scoring.blosum62
 
-        recodings = [
-            Recoding(
-                original_seq="|".join(split_seq),
-                recoded_seq="|".join(tup[0]),
-                score=tup[1]
-            ) for tup in zip(recoded_sequences, scores)
-        ]
-        ranked_recodings = sorted(
-            recodings, key=lambda recoding: -recoding.score
-        )
+    if scoring_fxn is None:
+        scoring_fxn = scoring.sum_score
+    scoring_fxn = partial(scoring_fxn, dist_mat)
 
-        return ranked_recodings
+    # generate site for original sequence
+    split_seq = user_input.split('|')
+    original_site = Site.from_seq(user_input)
+    print(f"Original aminos: on frame = {original_site.on_frame_prot}; "
+          f"off_frame = {original_site.off_frame_prot}")
 
-    @staticmethod
-    def report_recodings(ranked_recodings: List[Recoding]) -> None:
-        def report_(rec: Recoding):
-            print(f"recoded sequence: {rec.recoded_seq} | score: "
-                  f"{rec.score}")
-            aminos = get_aminos(rec.recoded_seq.split("|"))
-            print(f"recode frame aminos: {aminos[0:3]} | frame 2 aminos:"
-                  f" {aminos[3:]}")
+    # generate all possible recoded sites
+    possible_nt_changes = [
+        ''.join(tup)
+        for tup in itertools.product(dNTPs, repeat=len(split_seq[1]))
+    ]
+    all_possible_recoded_sites = [
+        (split_seq[0], recode, split_seq[2])
+        for recode in possible_nt_changes
+    ]
+    recoded_sites = [
+        Site.from_seq('|'.join(tup)) for tup in all_possible_recoded_sites
+        if ''.join(tup)[3:6].upper() not in codons_to_remove
+    ]
 
-        print(f"I found {len(ranked_recodings)} recodings")
-        print(f"The first ten recodings are: ")
-        for i, recoding in enumerate(ranked_recodings[:10]):
-            print(f"{i}: {'/' * 40}")
-            report_(recoding)
+    # calculate scores for each recoding
+    scores = [
+        scoring_fxn(original_site, recoded_site)
+        for recoded_site in recoded_sites
+    ]
 
-    @cli.pipeline
-    @cli.userinterface(RECODING_CHOICE_PROMPT)
-    def choose_recodings(self, user_input: str,
-                         recodings: List[Recoding]) -> Recoding:
-        return recodings[int(user_input)]
+    # generate all recodings and rank them
+    recodings = [
+        Recoding(
+            original_site=original_site,
+            recoded_site=recoded_site,
+            score=score
+        ) for recoded_site, score in zip(recoded_sites, scores)
+    ]
+    ranked_recodings = sorted(
+        recodings, key=lambda recoding: -recoding.score
+    )
 
-    @cli.pipeline
-    def update_log(self, choice: Recoding) -> Log:
+    return ranked_recodings
 
-        @cli.userinterface("gene name: ")
-        def ask_for_gene(user_input):
-            return user_input
 
-        @cli.userinterface("position of recoding (aa of TCG/TCA codon): ")
-        def ask_for_position(user_input):
-            return int(user_input)
+def report_recodings(ranked_recodings: List[Recoding]):
+    def report_(rec: Recoding):
+        print(f"recoded sequence: {rec.recoded_site.seq_str} | "
+              f"score: {rec.score}")
+        print(f"recode frame aminos: {rec.recoded_site.on_frame_prot} | "
+              f"off frame aminos: {rec.recoded_site.off_frame_prot}")
 
-        @cli.userinterface("recoding notes: ")
-        def ask_for_notes(user_input):
-            return user_input
+    print(f"I found {len(ranked_recodings)} recodings")
+    print(f"The first ten recodings are: ")
 
-        self.log.original_seq.append(choice.original_seq)
-        self.log.recoded_seq.append(choice.recoded_seq)
-        self.log.score.append(choice.score)
-        self.log.gene.append(ask_for_gene())
-        self.log.position.append(ask_for_position())
-        self.log.notes.append(ask_for_notes())
+    for i, recoding in enumerate(ranked_recodings[:10]):
+        print(f"{i}: {'/' * 40}")
+        report_(recoding)
 
-        return self.log
 
-    @cli.pipeline
-    @cli.userinterface("write log to filepath? ")
-    def write_log_prompt(self, user_input: str) -> None:
-        self.log.write_log(user_input)
+def update_log(
+        log: Log, rec: Recoding,
+        gene_name: str, position: str, notes: str
+) -> Log:
+    log.original_seq.append(rec.original_site.seq_str)
+    log.recoded_seq.append(rec.recoded_site.seq_str)
+    log.score.append(rec.score)
+    log.gene.append(gene_name)
+    log.position.append(position)
+    log.notes.append(notes)
+
+    return log
+
+
+if __name__ == "__main__":
+    # script parameters
+    SCORING_FXN = None
+
+    # long prompts
+    seq_input_prompt = "input sequence; highlight serine codon with " \
+                       "brackets (e.g., 'ct|ttcgga|t'): "
+    choice_prompt = f"which recoding would you like to choose? (please input " \
+                    f"int): "
+
+    # initialize log and loop variable
+    log = Log()
+    looping = True
+
+    # main event loop
+    while looping:
+        # loop: input sequence to recode
+        input_seq = cli.prompt_user(seq_input_prompt, input_seq_validator)
+        if looping and input_seq is not None:
+            # generate recodings for input sequence
+            ranked_recodings = generate_recodings(
+                input_seq, scoring_fxn=SCORING_FXN
+            )
+            report_recodings(ranked_recodings)
+
+            # choose particular recoding
+            choice_validator = cli.choice_validator_factory(ranked_recodings)
+            chosen_recoding_ix = cli.prompt_user(choice_prompt,
+                                                 choice_validator)
+        else:
+            looping = False
+            chosen_recoding_ix = None
+            ranked_recodings = None
+
+        # loop: choose and log recoding
+        if looping and chosen_recoding_ix is not None:
+            chosen_recoding = ranked_recodings[int(chosen_recoding_ix)]
+
+            # update log
+            gene_name = cli.prompt_user("gene name: ")
+            position = cli.prompt_user("position of recoding (aa of TCG/TCA "
+                                       "codon): ")
+            notes = cli.prompt_user("notes for this recoding?: ")
+            log = update_log(log, chosen_recoding, gene_name, position, notes)
+        else:
+            looping = False
+
+    # write log
+    filename = cli.prompt_user("write log to file? (input filename): ")
+    if filename is not None:
+        log.write_log(filename)

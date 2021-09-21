@@ -2,7 +2,7 @@ from pathlib import Path
 
 import pandas as pd
 
-from .ontology import *
+from ontology import Site
 
 __all__ = [
     # matrices
@@ -21,13 +21,13 @@ blosum62 = pd.read_csv(
 
 def sum_score(
         matrix: pd.DataFrame,
-        original_aminos: AminoSet,
-        recoded_aminos: AminoSet
+        original_aminos: Site,
+        recoded_aminos: Site
 ) -> float:
 
     return sum(
         matrix[old_aa][new_aa]
         for old_aa, new_aa in zip(
-            original_aminos.flatten(), recoded_aminos.flatten()
+            original_aminos.get_all_aminos(), recoded_aminos.get_all_aminos()
         )
     )
